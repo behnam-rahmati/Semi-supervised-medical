@@ -5,7 +5,7 @@ Pseudo-labeling is a well-studied approach in semi-supervised learning. However,
 
 <div align="center">
     <img src="https://github.com/user-attachments/assets/e176909d-b472-475c-b817-129daa0a113b" alt="image" width="350" height="auto">
-    <img width="268" alt="image" src="https://github.com/user-attachments/assets/3547274c-a277-491d-8b91-416d646d34f9">
+    <img width="200" alt="image" src="https://github.com/user-attachments/assets/3547274c-a277-491d-8b91-416d646d34f9">
 
 </div>
 
