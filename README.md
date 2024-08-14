@@ -15,4 +15,7 @@ modification of the unreliable pixels is performed through a deep-learning-based
 entire process is solved within a single loss function without the need to solve traditional active contour equations.
 We evaluated our approach on three publicly available datasets, including MRI and CT images from cardiac structures
 and lung tissue. Our proposed method outperforms the state-of-the-art semi-supervised learning methods on all three
-datasets
+datasets.
+
+![image](https://github.com/user-attachments/assets/e176909d-b472-475c-b817-129daa0a113b)
+
