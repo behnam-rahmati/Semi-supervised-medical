@@ -8,9 +8,7 @@ Pseudo-labeling is a well-studied approach in semi-supervised learning. However,
 </div>
 
 <div align="center">
-
     <img width="200" alt="image" src="https://github.com/user-attachments/assets/3547274c-a277-491d-8b91-416d646d34f9">
-
 </div>
 
 
