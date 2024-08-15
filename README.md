@@ -15,6 +15,7 @@ Test:
 This folder includes the module for testing our proposed method. It is tested on all three datasets (uncomment the one you wish to test).
 
 Traditional Active Contours:
+
 This folder includes the implementation of traditional active contours. These methods are not used in our implementation (our approach includes a novel deep learning-based adaptation of them), but we included the traditional methods for readers who may be interested in implementing them.
 
 Training:
