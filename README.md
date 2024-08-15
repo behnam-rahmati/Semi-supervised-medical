@@ -9,9 +9,11 @@ Pseudo-labeling is a well-studied approach in semi-supervised learning. However,
 The repository is organized as follows:
 
 Models:
+
 This folder includes different models (architectures) that you can test within our framework. To use any model, simply import and call it in the training and testing scripts. Various loss functions are defined in the models, including the standard ones, "CE" for Cross Entropy and "Dice" for Dice Loss, as well as our method-specific loss functions, "AC" and "AC2," which implement our novel loss function. This is an adaptation of active contour models, solved using deep learning rather than traditional partial differential equations.
 
 Test:
+
 This folder includes the module for testing our proposed method. It is tested on all three datasets (uncomment the one you wish to test).
 
 Traditional Active Contours:
@@ -19,9 +21,11 @@ Traditional Active Contours:
 This folder includes the implementation of traditional active contours. These methods are not used in our implementation (our approach includes a novel deep learning-based adaptation of them), but we included the traditional methods for readers who may be interested in implementing them.
 
 Training:
+
 This file includes the training modules for all three datasets.
 
 Utilities:
+
 This folder includes utility and helper functions.
 
 The repository paths are shown in the figure below.
