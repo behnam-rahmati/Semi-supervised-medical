@@ -1,0 +1,109 @@
+from typing import Any, Dict, Union
+import numpy as np
+import sapien
+import torch
+from mani_skill.agents.robots.panda import PandaWristCam
+from mani_skill.envs.sapien_env import BaseEnv
+from mani_skill.envs.scene import ManiSkillScene
+from mani_skill.sensors.camera import CameraConfig
+from mani_skill.utils import common, sapien_utils
+from mani_skill.utils.registration import register_env
+from mani_skill.utils.scene_builder.table import TableSceneBuilder
+from mani_skill.utils.structs import Actor, Pose
+from mani_skill.utils.structs.types import SimConfig
+
+
+@register_env("Basketball-v1", max_episode_steps=100)
+class BasketballEnv(BaseEnv):
+    """
+    **Task Description:**
+    Pick up a ball and aim for the hoop by aligning it correctly.
+    
+    **Randomizations:**
+    - Ball position is randomized.
+    - Hoop position is randomized along the x-axis.
+    """
+
+    _sample_video_link = "https://github.com/haosulab/ManiSkill/raw/main/figures/environment_demos/Basketball-v1_rt.mp4"
+    SUPPORTED_ROBOTS = ["panda_wristcam"]
+    agent: Union[PandaWristCam]
+
+    def __init__(self, *args, robot_uids="panda_wristcam", num_envs=1, **kwargs):
+        super().__init__(*args, robot_uids=robot_uids, num_envs=num_envs, **kwargs)
+
+    @property
+    def _default_sim_config(self):
+        return SimConfig()
+
+    @property
+    def _default_sensor_configs(self):
+        pose = sapien_utils.look_at([0, -0.3, 0.2], [0, 0, 0.1])
+        return [CameraConfig("base_camera", pose, 128, 128, np.pi / 2, 0.01, 100)]
+
+    def _load_agent(self, options: dict):
+        super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
+
+    def _load_scene(self, options: dict):
+        with torch.device(self.device):
+            self.table_scene = TableSceneBuilder(self)
+            self.table_scene.build()
+
+            # Ball and hoop setup
+            self.ball_radius = 0.12  # Example radius
+            self.hoop_x = 0.5  # Example hoop x position
+            self.hoop_y = 0.875  # Fixed y position of the hoop
+            self.hoop_z = 0.35  # Fixed z position of the hoop
+            
+            # Ball position randomized
+            ball_pos = np.array([0.0, 0.0, 0.1])  # Example position
+            ball_builder = self.scene.create_actor_builder()
+            ball_builder.add_sphere_collision(radius=self.ball_radius)
+            ball_builder.add_sphere_visual(material=sapien.render.RenderMaterial(base_color=sapien_utils.hex2rgba("#FF4500")))
+            ball_builder.initial_pose = sapien.Pose(p=ball_pos)
+            self.ball = ball_builder.build(f"ball")
+            
+            # Hoop setup
+            hoop_builder = self.scene.create_actor_builder()
+            hoop_builder.add_box_collision(half_size=[0.5, 0.05, 0.2])  # Example hoop dimensions
+            hoop_builder.add_box_visual(material=sapien.render.RenderMaterial(base_color=sapien_utils.hex2rgba("#0000FF")))
+            hoop_builder.initial_pose = sapien.Pose(p=[self.hoop_x, self.hoop_y, self.hoop_z])
+            self.hoop = hoop_builder.build(f"hoop")
+
+    def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
+        with torch.device(self.device):
+            self.ball.set_pose(sapien.Pose(p=[np.random.uniform(-0.2, 0.2), np.random.uniform(-0.3, 0.3), 0.1]))
+            self.hoop.set_pose(sapien.Pose(p=[self.hoop_x, np.random.uniform(0.75, 1.0), self.hoop_z]))
+            
+            # Initialize the robot position
+            qpos = np.array([0.0, np.pi / 8, 0, -np.pi * 5 / 8, 0, np.pi * 3 / 4, -np.pi / 4, 0.04, 0.04])
+            self.agent.robot.set_qpos(qpos)
+            self.agent.robot.set_pose(sapien.Pose([-0.615, 0, 0]))
+
+    @property
+    def goal_pose(self):
+        # The hoop is the goal for the task
+        return self.hoop.pose
+
+    def evaluate(self):
+        # Check if the ball is close enough to the hoop
+        ball_pos_at_hoop = (self.hoop.pose.inv() * self.ball.pose).p
+        distance = np.linalg.norm(ball_pos_at_hoop[:2])  # Only x and y distance
+        return dict(success=(distance < 0.05), ball_pos_at_hoop=ball_pos_at_hoop)
+
+    def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
+        # Reward for moving the ball closer to the hoop
+        ball_pos = self.ball.pose.p
+        hoop_pos = self.hoop.pose.p
+        dist_to_hoop = np.linalg.norm(ball_pos[:2] - hoop_pos[:2])
+
+        # Encourage closer ball positioning to the hoop
+        reward = 1.0 - dist_to_hoop
+
+        # Reward if the ball is near the hoop
+        if dist_to_hoop < 0.05:
+            reward += 5.0  # Success reward when ball is near hoop
+
+        return reward
+
+    def compute_normalized_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
+        return self.compute_dense_reward(obs, action, info) / 10
