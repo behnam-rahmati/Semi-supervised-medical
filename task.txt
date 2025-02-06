@@ -2,6 +2,7 @@ from typing import Any, Dict, Union
 import numpy as np
 import sapien
 import torch
+
 from mani_skill.agents.robots.panda import PandaWristCam
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.envs.scene import ManiSkillScene
@@ -12,6 +13,7 @@ from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs import Actor, Pose
 from mani_skill.utils.structs.types import SimConfig
+
 
 def _build_box_with_hole(
     scene: ManiSkillScene, inner_radius, outer_radius, depth, center=(0, 0)
@@ -32,13 +34,16 @@ def _build_box_with_hole(
         sapien.Pose([0, 0, offset + half_center[1]]),
         sapien.Pose([0, 0, -offset + half_center[1]]),
     ]
+
     mat = sapien.render.RenderMaterial(
         base_color=sapien_utils.hex2rgba("#FFD289"), roughness=0.5, specular=0.5
     )
+
     for half_size, pose in zip(half_sizes, poses):
         builder.add_box_collision(pose, half_size)
         builder.add_box_visual(pose, half_size, material=mat)
     return builder
+
 
 @register_env("PegInsertionSide-v1", max_episode_steps=100)
 class PegInsertionSideEnv(BaseEnv):
@@ -47,13 +52,26 @@ class PegInsertionSideEnv(BaseEnv):
     agent: Union[PandaWristCam]
     _clearance = 0.003
 
-    def __init__(self, *args, robot_uids="panda_wristcam", num_envs=1, reconfiguration_freq=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        robot_uids="panda_wristcam",
+        num_envs=1,
+        reconfiguration_freq=None,
+        **kwargs,
+    ):
         if reconfiguration_freq is None:
             if num_envs == 1:
                 reconfiguration_freq = 1
             else:
                 reconfiguration_freq = 0
-        super().__init__(*args, robot_uids=robot_uids, num_envs=num_envs, reconfiguration_freq=reconfiguration_freq, **kwargs)
+        super().__init__(
+            *args,
+            robot_uids=robot_uids,
+            num_envs=num_envs,
+            reconfiguration_freq=reconfiguration_freq,
+            **kwargs,
+        )
 
     @property
     def _default_sim_config(self):
@@ -79,7 +97,11 @@ class PegInsertionSideEnv(BaseEnv):
 
             lengths = self._batched_episode_rng.uniform(0.085, 0.125)
             radii = self._batched_episode_rng.uniform(0.015, 0.025)
-            centers = 0.5 * (lengths - radii)[:, None] * self._batched_episode_rng.uniform(-1, 1, size=(2,))
+            centers = (
+                0.5
+                * (lengths - radii)[:, None]
+                * self._batched_episode_rng.uniform(-1, 1, size=(2,))
+            )
 
             self.peg_half_sizes = common.to_tensor(np.vstack([lengths, radii, radii])).T
             peg_head_offsets = torch.zeros((self.num_envs, 3))
@@ -93,16 +115,18 @@ class PegInsertionSideEnv(BaseEnv):
 
             pegs = []
             boxes = []
-            hammers = []  # List for storing hammer actors
+            hammers = []  # Add a list to store hammer actors
 
             for i in range(self.num_envs):
                 scene_idxs = [i]
                 length = lengths[i]
                 radius = radii[i]
+
                 builder = self.scene.create_actor_builder()
                 builder.add_box_collision(half_size=[length, radius, radius])
                 mat = sapien.render.RenderMaterial(base_color=sapien_utils.hex2rgba("#EC7357"), roughness=0.5, specular=0.5)
                 builder.add_box_visual(sapien.Pose([length / 2, 0, 0]), half_size=[length / 2, radius, radius], material=mat)
+
                 mat = sapien.render.RenderMaterial(base_color=sapien_utils.hex2rgba("#EDF6F9"), roughness=0.5, specular=0.5)
                 builder.add_box_visual(sapien.Pose([-length / 2, 0, 0]), half_size=[length / 2, radius, radius], material=mat)
                 builder.initial_pose = sapien.Pose(p=[0, 0, 0.1])
@@ -116,20 +140,29 @@ class PegInsertionSideEnv(BaseEnv):
                 builder.set_scene_idxs(scene_idxs)
                 box = builder.build_kinematic(f"box_with_hole_{i}")
                 self.remove_from_state_dict_registry(box)
+
                 pegs.append(peg)
                 boxes.append(box)
 
-                # Load hammer
+                # Load Hammer (simple geometry)
                 hammer_builder = self.scene.create_actor_builder()
-                hammer_builder.add_from_xml(self._load_hammer_xml())  # Load from XML file
-                hammer_builder.set_scene_idxs(scene_idxs)
+                hammer_pos = sapien.Pose([0.3, 0.6, 0.02])  # Hammer position
+                hammer_builder.add_box_collision(hammer_pos, [0.02, 0.1, 0.02])  # Hammer handle (cylinder)
+                hammer_builder.add_box_visual(hammer_pos, [0.02, 0.1, 0.02], sapien.render.RenderMaterial(base_color=sapien_utils.hex2rgba("#FF5733")))
+
+                hammer_pos_head = sapien.Pose([0.12, 0, 0])  # Hammer head position
+                hammer_builder.add_box_collision(hammer_pos_head, [0.02, 0.04, 0.02])  # Hammer head (box)
+                hammer_builder.add_box_visual(hammer_pos_head, [0.02, 0.04, 0.02], sapien.render.RenderMaterial(base_color=sapien_utils.hex2rgba("#FF5733")))
+
                 hammer = hammer_builder.build(f"hammer_{i}")
                 hammers.append(hammer)
 
             self.peg = Actor.merge(pegs, "peg")
             self.box = Actor.merge(boxes, "box_with_hole")
-            self.hammer = Actor.merge(hammers, "hammer")  # Add hammer actor
+            self.hammer = Actor.merge(hammers, "hammer")  # Add hammer to the state
 
+            self.add_to_state_dict_registry(self.peg)
+            self.add_to_state_dict_registry(self.box)
             self.add_to_state_dict_registry(self.hammer)
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
@@ -151,9 +184,10 @@ class PegInsertionSideEnv(BaseEnv):
             quat = randomization.random_quaternions(b, self.device, lock_x=True, lock_y=True, bounds=(np.pi / 2 - np.pi / 8, np.pi / 2 + np.pi / 8))
             self.box.set_pose(Pose.create_from_pq(pos, quat))
 
+            # Initialize hammer position
             hammer_pos = torch.zeros((b, 3))
-            hammer_pos[:, 0] = self._batched_episode_rng.uniform(-0.1, 0.1, size=(b,))  # Random x placement
-            hammer_pos[:, 1] = self._batched_episode_rng.uniform(0.5, 0.8, size=(b,))  # Random y placement
+            hammer_pos[:, 0] = self._batched_episode_rng.uniform(-0.1, 0.1, size=(b,))
+            hammer_pos[:, 1] = self._batched_episode_rng.uniform(0.5, 0.8, size=(b,))
             hammer_pos[:, 2] = 0.02  # Hammer height
             self.hammer.set_pose(Pose.create_from_pq(hammer_pos, quat))
 
@@ -162,3 +196,20 @@ class PegInsertionSideEnv(BaseEnv):
             qpos[:, -2:] = 0.04
             self.agent.robot.set_qpos(qpos)
             self.agent.robot.set_pose(sapien.Pose([-0.615, 0, 0]))
+
+    # Save some commonly used attributes
+    @property
+    def peg_head_pos(self):
+        return self.peg.pose.p + self.peg_head_offsets.p
+
+    @property
+    def peg_head_pose(self):
+        return self.peg.pose * self.peg_head_offsets
+
+    @property
+    def box_hole_pose(self):
+        return self.box.pose * self.box_hole_offsets
+
+    @property
+    def goal_pose(self):
+        return self.box.pose * self.box_hole_offsets * self.peg_head_offsets.inv()
