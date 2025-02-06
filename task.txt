@@ -328,3 +328,27 @@ def has_peg_unplugged(self):
     self._prev_success = x_flag
     return x_flag
 
+
+
+
+
+
+def has_peg_unplugged(self):
+    peg_head_pos_at_hole = (self.box_hole_pose.inv() * self.peg_head_pose).p
+
+    # If _prev_success doesn't exist, initialize it as a tensor of False values
+    if not hasattr(self, "_prev_success"):
+        self._prev_success = torch.zeros_like(peg_head_pos_at_hole[:, 0], dtype=torch.bool)
+
+    # Peg is considered unplugged if it has moved out of the hole
+    x_flag = peg_head_pos_at_hole[:, 0] > 0.015  # x-axis movement out of the hole
+
+    # Prevent the episode from terminating on the first frame
+    x_flag = torch.logical_and(x_flag, self._prev_success.logical_not())  
+
+    # Store success state for future frames
+    self._prev_success = x_flag
+
+    return x_flag
+
+
