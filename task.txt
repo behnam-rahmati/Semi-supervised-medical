@@ -299,3 +299,32 @@ class PegUnplugSideEnv(BaseEnv):
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
         return self.compute_dense_reward(obs, action, info) / 10
+
+
+
+
+
+
+
+
+
+
+
+def has_peg_unplugged(self):
+    # Check if peg is unplugged (moved outside of the hole)
+    peg_head_pos_at_hole = (self.box_hole_pose.inv() * self.peg_head_pose).p
+    
+    # Peg should remain inside initially
+    if not hasattr(self, "_prev_success"):
+        self._prev_success = False
+
+    # If the peg is initially too far out, don't count it as unplugged
+    x_flag = peg_head_pos_at_hole[:, 0] > 0.015  # Peg head should move out of hole
+
+    # Prevent immediate success on first frame
+    if self._prev_success is False:
+        x_flag = False  # Force task to not end immediately
+
+    self._prev_success = x_flag
+    return x_flag
+
